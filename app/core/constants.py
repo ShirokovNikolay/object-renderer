@@ -58,10 +58,17 @@ class ProjectVisibility(StrEnum):
     private = "private"
 
 
-@dataclass
+@dataclass(frozen=True)
 class S3Bucket:
     input_bucket = "output"
     output_bucket = "output"
 
 
+@dataclass(frozen=True)
+class KafkaTopic:
+    create_project: str = "create_project"
+    generate_model: str = "generate_model"
+
+
 s3_bucket = S3Bucket()
+kafka_topic = KafkaTopic()

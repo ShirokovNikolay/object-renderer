@@ -2,6 +2,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict
 
+from schemas.constraints.file import BucketConstraint, KeyConstraint
 from schemas.constraints.render import (
     HeightConstraint,
     SampleConstraint,
@@ -36,3 +37,12 @@ class RenderResponse(RenderBase):
 
     file_id: int | None
     id: int
+
+
+class GenerateRenderEvent(RenderCreate):
+    """
+    Схема для события генерация проекта.
+    """
+
+    bucket: BucketConstraint
+    key: KeyConstraint

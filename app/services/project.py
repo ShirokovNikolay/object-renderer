@@ -2,21 +2,24 @@ from typing import cast
 
 from core.constants import ProjectVisibility
 from core.exceptions.auth import PermissionDeniedError
+from core.exceptions.file import FileIdNotFoundError
 from core.exceptions.project import ProjectIdNotFoundError
 from core.exceptions.user import UserIdNotFoundError
 from core.interfaces.clients import AbstractUnitOfWorkClient
 from core.interfaces.services import AbstractRenderService
 from infrastructure.database.models import User
+from infrastructure.database.repositories.file import FileRepository
 from infrastructure.database.repositories.project import ProjectRepository
 from infrastructure.database.repositories.render import RenderRepository
 from infrastructure.database.repositories.user import UserRepository
+from schemas.file import FileData
 from schemas.project import (
     ProjectResponse,
     ProjectResponseList,
     ProjectWithRenderCreate,
     ProjectWithRenderResponse,
 )
-from schemas.render import RenderResponse
+from schemas.render import GenerateRenderEvent, RenderResponse
 
 
 class ProjectService:
@@ -28,6 +31,7 @@ class ProjectService:
         self.user_repository = self.unit_of_work.get_repository(UserRepository)
         self.project_repository = self.unit_of_work.get_repository(ProjectRepository)
         self.render_repository = self.unit_of_work.get_repository(RenderRepository)
+        self.file_repository = self.unit_of_work.get_repository(FileRepository)
 
     async def get_by_id(
         self,
@@ -105,13 +109,23 @@ class ProjectService:
     ) -> ProjectWithRenderResponse:
         create_project_data = create_project.project
         create_render_data = create_project.render
+        file_id = create_project_data.source_file_id
+        file = await self.file_repository.get_by_id(file_id)
+        if file is None:
+            raise FileIdNotFoundError(file_id)
+        file_response = FileData.model_validate(file)
         render = await self.render_repository.create_render(create_render_data)
         project = await self.project_repository.create_project(
             user_id=user_id,
             render_id=render.id,
             create_project_data=create_project_data,
         )
-        await render_service.send_event_render_model(create_render_data)
+        render_event_data = GenerateRenderEvent(
+            bucket=file_response.bucket,
+            key=file_response.key,
+            **create_render_data.model_dump(),
+        )
+        await render_service.send_event_render_model(render_event_data)
         render_response = RenderResponse.model_validate(render)
         project_response = ProjectResponse.model_validate(project)
         project_with_render_response = ProjectWithRenderResponse(
